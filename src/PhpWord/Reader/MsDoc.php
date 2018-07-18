@@ -114,6 +114,25 @@ class MsDoc extends AbstractReader implements ReaderInterface
     const MSOBLIPTIFF = 0x11;
     const MSOBLIPCMYKJPEG = 0x12;
 
+    const CODE_PAGE          = 0x01;
+    const PIDSI_TITLE        = 0x02;
+    const PIDSI_SUBJECT      = 0x03;
+    const PIDSI_AUTHOR       = 0x04;
+    const PIDSI_KEYWORDS     = 0x05;
+    const PIDSI_COMMENTS     = 0x06;
+    const PIDSI_TEMPLATE     = 0x07;
+    const PIDSI_LASTAUTHOR   = 0x08;
+    const PIDSI_REVNUMBER    = 0x09;
+    const PIDSI_APPNAME      = 0x12;
+    const PIDSI_EDITTIME     = 0x0A;
+    const PIDSI_LASTPRINTED  = 0x0B;
+    const PIDSI_CREATE_DTM   = 0x0C;
+    const PIDSI_LASTSAVE_DTM = 0x0D;
+    const PIDSI_PAGECOUNT    = 0x0E;
+    const PIDSI_WORDCOUNT    = 0x0F;
+    const PIDSI_CHARCOUNT    = 0x10;
+    const PIDSI_DOC_SECURITY = 0x13;
+
     /**
      * Loads PhpWord from file
      *
@@ -209,84 +228,28 @@ class MsDoc extends AbstractReader implements ReaderInterface
         // Size
         $pos += 4;
         // NumProperties
-        $pos += 4;
-        // ----- CodePage
-        $pos += 4;
-        $arrOffsets['CodePage'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_TITLE
-        $pos += 4;
-        $arrOffsets['PIDSI_TITLE'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_SUBJECT
-        $pos += 4;
-        $arrOffsets['PIDSI_SUBJECT'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_AUTHOR
-        $pos += 4;
-        $arrOffsets['PIDSI_AUTHOR'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_KEYWORDS
-        $pos += 4;
-        $arrOffsets['PIDSI_KEYWORDS'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_COMMENTS
-        $pos += 4;
-        $arrOffsets['PIDSI_COMMENTS'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_TEMPLATE
-        $pos += 4;
-        $arrOffsets['PIDSI_TEMPLATE'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_LASTAUTHOR
-        $pos += 4;
-        $arrOffsets['PIDSI_LASTAUTHOR'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_REVNUMBER
-        $pos += 4;
-        $arrOffsets['PIDSI_REVNUMBER'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_APPNAME
-        $pos += 4;
-        $arrOffsets['PIDSI_APPNAME'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_EDITTIME
-        $pos += 4;
-        $arrOffsets['PIDSI_EDITTIME'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_LASTPRINTED
-        // COMMENTED SINCE MISSING ON TEST FILE
-        /**
-        $pos += 4;
-        $arrOffsets['PIDSI_LASTPRINTED'] = self::getInt4d($data, $pos);
-        $pos += 4;**/
-        // ----- PIDSI_CREATE_DTM
-        $pos += 4;
-        $arrOffsets['PIDSI_CREATE_DTM'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_LASTSAVE_DTM
-        $pos += 4;
-        $arrOffsets['PIDSI_LASTSAVE_DTM'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_PAGECOUNT
-        $pos += 4;
-        $arrOffsets['PIDSI_PAGECOUNT'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_WORDCOUNT
-        $pos += 4;
-        $arrOffsets['PIDSI_WORDCOUNT'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_CHARCOUNT
-        $pos += 4;
-        $arrOffsets['PIDSI_CHARCOUNT'] = self::getInt4d($data, $pos);
-        $pos += 4;
-        // ----- PIDSI_DOC_SECURITY
-        $pos += 4;
-        $arrOffsets['PIDSI_DOC_SECURITY'] = self::getInt4d($data, $pos);
+        $numProperties = self::getInt4d($data, $pos);
         $pos += 4;
 
+        $arrayIdentifierOffsets = array();
+
+        // PropertyIdentifierAndOffset packets are always of format
+        // PropertyIdentifier (4 bytes), Offset (4 bytes). Iterate over expected
+        // number of properties, building array mapping identifiers to data
+        // offsets. Ensures we safely handle situations where fields are
+        // missing or out-of-order
+        // See https://msdn.microsoft.com/en-us/library/dd942543.aspx
+        for($i = 0; $i < $numProperties; $i++) {
+            $propertyIdentifier = self::getInt4d($data, $pos);
+            $pos += 4;
+            $offset = self::getInt4d($data, $pos);
+            $pos += 4;
+
+            $arrayIdentifierOffsets[$propertyIdentifier] = $offset;
+        }
+
         // Goto location of date info
-        $pos = $offsetPropertyPacket + $arrOffsets['PIDSI_CREATE_DTM'];
+        $pos = $offsetPropertyPacket + $arrayIdentifierOffsets[self::PIDSI_CREATE_DTM];
         // Type
         $pos += 2;
         // Padding
