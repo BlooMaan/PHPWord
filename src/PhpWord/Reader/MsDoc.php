@@ -80,6 +80,10 @@ class MsDoc extends AbstractReader implements ReaderInterface
      * @var \stdClass[]
      */
     private $arraySections = array();
+    /**
+     * @var string[]
+    **/
+    private $arraySummary = array();
 
     const VERSION_97 = '97';
     const VERSION_2000 = '2000';
@@ -124,6 +128,7 @@ class MsDoc extends AbstractReader implements ReaderInterface
 
         $this->readFib($this->dataWorkDocument);
         $this->readFibContent();
+        $this->readSummaryInformationContent($this->_SummaryInformation);
 
         return $this->phpWord;
     }
@@ -166,6 +171,136 @@ class MsDoc extends AbstractReader implements ReaderInterface
         }
 
         return $arrayCP;
+    }
+
+
+    /**
+     * Reads summary information
+     *
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @return void
+    **/
+    private function readSummaryInformationContent($data)
+    {
+        // Offsets between the start of the relevant propertyset packet, and
+        // the start of a given property's data
+        $arrOffsets = array();
+
+        $offsetPropertyPacket = 48;
+
+        $pos = 0;
+        // ByteOrder
+        $pos += 2;
+        // Version
+        $pos += 2;
+        // SystemIdentifier
+        $pos += 4;
+        // CLSID
+        $pos += 16;
+        // NumPropertySets
+        $pos += 4;
+        // FMTID 0
+        $pos += 16;
+        // Offset 0
+        $pos += 4;
+        // FMTID 1 (0 bytes)
+        // Offset 1 (0 bytes)
+        // ----- PropertySet 0
+        // Size
+        $pos += 4;
+        // NumProperties
+        $pos += 4;
+        // ----- CodePage
+        $pos += 4;
+        $arrOffsets['CodePage'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_TITLE
+        $pos += 4;
+        $arrOffsets['PIDSI_TITLE'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_SUBJECT
+        $pos += 4;
+        $arrOffsets['PIDSI_SUBJECT'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_AUTHOR
+        $pos += 4;
+        $arrOffsets['PIDSI_AUTHOR'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_KEYWORDS
+        $pos += 4;
+        $arrOffsets['PIDSI_KEYWORDS'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_COMMENTS
+        $pos += 4;
+        $arrOffsets['PIDSI_COMMENTS'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_TEMPLATE
+        $pos += 4;
+        $arrOffsets['PIDSI_TEMPLATE'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_LASTAUTHOR
+        $pos += 4;
+        $arrOffsets['PIDSI_LASTAUTHOR'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_REVNUMBER
+        $pos += 4;
+        $arrOffsets['PIDSI_REVNUMBER'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_APPNAME
+        $pos += 4;
+        $arrOffsets['PIDSI_APPNAME'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_EDITTIME
+        $pos += 4;
+        $arrOffsets['PIDSI_EDITTIME'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_LASTPRINTED
+        // COMMENTED SINCE MISSING ON TEST FILE
+        /**
+        $pos += 4;
+        $arrOffsets['PIDSI_LASTPRINTED'] = self::getInt4d($data, $pos);
+        $pos += 4;**/
+        // ----- PIDSI_CREATE_DTM
+        $pos += 4;
+        $arrOffsets['PIDSI_CREATE_DTM'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_LASTSAVE_DTM
+        $pos += 4;
+        $arrOffsets['PIDSI_LASTSAVE_DTM'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_PAGECOUNT
+        $pos += 4;
+        $arrOffsets['PIDSI_PAGECOUNT'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_WORDCOUNT
+        $pos += 4;
+        $arrOffsets['PIDSI_WORDCOUNT'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_CHARCOUNT
+        $pos += 4;
+        $arrOffsets['PIDSI_CHARCOUNT'] = self::getInt4d($data, $pos);
+        $pos += 4;
+        // ----- PIDSI_DOC_SECURITY
+        $pos += 4;
+        $arrOffsets['PIDSI_DOC_SECURITY'] = self::getInt4d($data, $pos);
+        $pos += 4;
+
+        // Goto location of date info
+        $pos = $offsetPropertyPacket + $arrOffsets['PIDSI_CREATE_DTM'];
+        // Type
+        $pos += 2;
+        // Padding
+        $pos += 2;
+        // Data
+        $dwLowDateTime = self::getHex4d($data, $pos);
+        $pos += 4;
+        $dwHighDateTime = self::getHex4d($data, $pos);
+        $pos += 4;
+
+        $hex = $dwHighDateTime . $dwLowDateTime;
+        $date = hexdec($hex);
+        var_dump($date);
+        die();
     }
 
     /**
@@ -2350,5 +2485,19 @@ class MsDoc extends AbstractReader implements ReaderInterface
         }
 
         return ord($data[$pos]) | (ord($data[$pos + 1]) << 8) | (ord($data[$pos + 2]) << 16) | $ord24;
+    }
+
+    /**
+     * Read 64-bit hex string. Allows for parsing values greater than INT_MAX on
+     * platforms which are limited to 32-bit integers.
+     *
+     * @param string $data
+     * @param int $pos
+     * @return string
+    **/
+    public static function getHex4d($data, $pos)
+    {
+        $raw = $data[$pos + 3] . $data[$pos + 2] . $data[$pos + 1] . $data[$pos];
+        return bin2hex($raw);
     }
 }
