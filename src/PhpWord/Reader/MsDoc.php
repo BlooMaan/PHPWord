@@ -81,7 +81,7 @@ class MsDoc extends AbstractReader implements ReaderInterface
      */
     private $arraySections = array();
     /**
-     * @var string[]
+     * @var mixed[]
     **/
     private $arraySummary = array();
 
@@ -114,6 +114,7 @@ class MsDoc extends AbstractReader implements ReaderInterface
     const MSOBLIPTIFF = 0x11;
     const MSOBLIPCMYKJPEG = 0x12;
 
+    const OFFSET_PROPERTY_PACKET = 48;
     const CODE_PAGE          = 0x01;
     const PIDSI_TITLE        = 0x02;
     const PIDSI_SUBJECT      = 0x03;
@@ -147,7 +148,7 @@ class MsDoc extends AbstractReader implements ReaderInterface
 
         $this->readFib($this->dataWorkDocument);
         $this->readFibContent();
-        $this->readSummaryInformationContent($this->_SummaryInformation);
+        $this->readSummaryInfoContent($this->_SummaryInformation);
 
         return $this->phpWord;
     }
@@ -192,14 +193,14 @@ class MsDoc extends AbstractReader implements ReaderInterface
         return $arrayCP;
     }
 
-
     /**
      * Reads summary information
      *
      * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
      * @return void
     **/
-    private function readSummaryInformationContent($data)
+    private function readSummaryInfoContent($data)
     {
         // Offsets between the start of the relevant propertyset packet, and
         // the start of a given property's data
@@ -231,39 +232,86 @@ class MsDoc extends AbstractReader implements ReaderInterface
         $numProperties = self::getInt4d($data, $pos);
         $pos += 4;
 
-        $arrayIdentifierOffsets = array();
-
         // PropertyIdentifierAndOffset packets are always of format
         // PropertyIdentifier (4 bytes), Offset (4 bytes). Iterate over expected
         // number of properties, building array mapping identifiers to data
         // offsets. Ensures we safely handle situations where fields are
         // missing or out-of-order
-        // See https://msdn.microsoft.com/en-us/library/dd942543.aspx
         for($i = 0; $i < $numProperties; $i++) {
             $propertyIdentifier = self::getInt4d($data, $pos);
             $pos += 4;
             $offset = self::getInt4d($data, $pos);
             $pos += 4;
 
-            $arrayIdentifierOffsets[$propertyIdentifier] = $offset;
+            $this->arraySummary[$propertyIdentifier] =
+                $this->readSummaryInfoProperty($data, $propertyIdentifier, $offset);
         }
 
-        // Goto location of date info
-        $pos = $offsetPropertyPacket + $arrayIdentifierOffsets[self::PIDSI_CREATE_DTM];
-        // Type
-        $pos += 2;
-        // Padding
-        $pos += 2;
-        // Data
-        $dwLowDateTime = self::getHex4d($data, $pos);
-        $pos += 4;
-        $dwHighDateTime = self::getHex4d($data, $pos);
-        $pos += 4;
-
-        $hex = $dwHighDateTime . $dwLowDateTime;
-        $date = hexdec($hex);
-        var_dump($date);
+        var_dump($this->arraySummary);
         die();
+    }
+
+    /**
+     * Attempts to parse a property with given identifier from the
+     * SummaryInformation stream. Only partial coverage has been added such that
+     * relevant DocInfo fields on the PhpWord object can be loaded
+     *
+     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
+     * @return mixed
+    **/
+    private function readSummaryInfoProperty($data, $identifier, $offset)
+    {
+        // Offsets are relative to the start of the property packet
+        $pos = self::OFFSET_PROPERTY_PACKET + $offset;
+
+        switch ($identifier) {
+            // Original document author. Maps to DocInfo's 'creator'
+            case self::PIDSI_AUTHOR:
+            // Last person to modify document. Maps to DocInfo's 'lastModifiedBy'
+            case self::PIDSI_LASTAUTHOR:
+            // Document's keywords. Maps to DocInfo's 'keywords'
+            case self::PIDSI_KEYWORDS:
+            // Document's subject. Maps to DocInfo's 'subject'
+            case self::PIDSI_SUBJECT:
+            // Document's title. Maps to DocInfo's 'title'
+            case self::PIDSI_TITLE:
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                $size = self::getInt4d($data, $pos);
+                $pos += 4;
+                return substr($data, $pos, $size);
+
+            // Document creation time. Maps to DocInfo's 'created'
+            case self::PIDSI_CREATE_DTM:
+            // Time document was last modified. Maps to DocInfo's 'modified'
+            case self::PIDSI_LASTSAVE_DTM:
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                // Data
+                $dwLowDateTime = self::getHex4d($data, $pos);
+                $pos += 4;
+                $dwHighDateTime = self::getHex4d($data, $pos);
+                $pos += 4;
+
+                $hex = $dwHighDateTime . $dwLowDateTime;
+                return hexdec($hex);
+
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                $size = self::getInt4d($data, $pos);
+                $pos += 4;
+                return substr($data, $pos, $size);
+
+            // Property isn't relevant to DocInfo
+            default:
+                return null;
+        }
     }
 
     /**
