@@ -181,6 +181,17 @@ class PhpWord
     }
 
     /**
+     * Set document info object
+     *
+     * @param \PhpOffice\PhpWord\Metadata\DocInfo $docInfo
+     * @return self
+     */
+    public function setDocInfo($docInfo)
+    {
+        $this->metadata['DocInfo'] = $docInfo;
+    }
+
+    /**
      * Get protection
      *
      * @return \PhpOffice\PhpWord\Metadata\Protection

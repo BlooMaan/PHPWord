@@ -18,6 +18,7 @@
 namespace PhpOffice\PhpWord\Reader;
 
 use PhpOffice\Common\Drawing;
+use PhpOffice\PhpWord\Metadata\DocInfo;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\Shared\OLERead;
 use PhpOffice\PhpWord\Style;
@@ -150,6 +151,19 @@ class MsDoc extends AbstractReader implements ReaderInterface
         $this->readFibContent();
         $this->readSummaryInfoContent($this->_SummaryInformation);
 
+        $docinfo = new DocInfo();
+        $docinfo->setCreator($this->arraySummary[self::PIDSI_AUTHOR]);
+        $docinfo->setLastModifiedBy($this->arraySummary[self::PIDSI_LASTAUTHOR]);
+        $docinfo->setCreated($this->arraySummary[self::PIDSI_CREATE_DTM]);
+        $docinfo->setModified($this->arraySummary[self::PIDSI_LASTSAVE_DTM]);
+        $docinfo->setTitle($this->arraySummary[self::PIDSI_TITLE]);
+        $docinfo->setSubject($this->arraySummary[self::PIDSI_SUBJECT]);
+        $docinfo->setKeywords($this->arraySummary[self::PIDSI_KEYWORDS]);
+        $this->phpWord->setDocInfo($docinfo);
+
+        var_dump($this->phpWord->getDocInfo());
+        die();
+
         return $this->phpWord;
     }
 
@@ -246,9 +260,6 @@ class MsDoc extends AbstractReader implements ReaderInterface
             $this->arraySummary[$propertyIdentifier] =
                 $this->readSummaryInfoProperty($data, $propertyIdentifier, $offset);
         }
-
-        var_dump($this->arraySummary);
-        die();
     }
 
     /**
