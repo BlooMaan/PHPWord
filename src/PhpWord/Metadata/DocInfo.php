@@ -47,14 +47,14 @@ class DocInfo
     /**
      * Created
      *
-     * @var int
+     * @var mixed
      */
     private $created;
 
     /**
      * Modified
      *
-     * @var int
+     * @var mixed
      */
     private $modified;
 
@@ -181,7 +181,7 @@ class DocInfo
     /**
      * Get Created
      *
-     * @return int
+     * @return mixed
      */
     public function getCreated()
     {
@@ -191,7 +191,7 @@ class DocInfo
     /**
      * Set Created
      *
-     * @param  int $value
+     * @param  mixed $value
      * @return self
      */
     public function setCreated($value = null)
@@ -204,7 +204,7 @@ class DocInfo
     /**
      * Get Modified
      *
-     * @return int
+     * @return mixed
      */
     public function getModified()
     {
@@ -214,7 +214,7 @@ class DocInfo
     /**
      * Set Modified
      *
-     * @param  int $value
+     * @param  mixed $value
      * @return self
      */
     public function setModified($value = null)
