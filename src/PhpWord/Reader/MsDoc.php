@@ -206,124 +206,6 @@ class MsDoc extends AbstractReader implements ReaderInterface
     }
 
     /**
-     * Reads summary information
-     *
-     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
-     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
-     * @return void
-    **/
-    private function readSummaryInfoContent($data)
-    {
-        // Offsets between the start of the relevant propertyset packet, and
-        // the start of a given property's data
-        $arrOffsets = array();
-
-        $offsetPropertyPacket = 48;
-
-        $pos = 0;
-        // ByteOrder
-        $pos += 2;
-        // Version
-        $pos += 2;
-        // SystemIdentifier
-        $pos += 4;
-        // CLSID
-        $pos += 16;
-        // NumPropertySets
-        $pos += 4;
-        // FMTID 0
-        $pos += 16;
-        // Offset 0
-        $pos += 4;
-        // FMTID 1 (0 bytes)
-        // Offset 1 (0 bytes)
-        // ----- PropertySet 0
-        // Size
-        $pos += 4;
-        // NumProperties
-        $numProperties = self::getInt4d($data, $pos);
-        $pos += 4;
-
-        // PropertyIdentifierAndOffset packets are always of format
-        // PropertyIdentifier (4 bytes), Offset (4 bytes). Iterate over expected
-        // number of properties, building array mapping identifiers to data
-        // offsets. Ensures we safely handle situations where fields are
-        // missing or out-of-order
-        for($i = 0; $i < $numProperties; $i++) {
-            $propertyIdentifier = self::getInt4d($data, $pos);
-            $pos += 4;
-            $offset = self::getInt4d($data, $pos);
-            $pos += 4;
-
-            $this->arraySummary[$propertyIdentifier] =
-                $this->readSummaryInfoProperty($data, $propertyIdentifier, $offset);
-        }
-    }
-
-    /**
-     * Attempts to parse a property with given identifier from the
-     * SummaryInformation stream. Only partial coverage has been added such that
-     * relevant DocInfo fields on the PhpWord object can be loaded
-     *
-     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
-     * @return mixed
-    **/
-    private function readSummaryInfoProperty($data, $identifier, $offset)
-    {
-        // Offsets are relative to the start of the property packet
-        $pos = self::OFFSET_PROPERTY_PACKET + $offset;
-
-        switch ($identifier) {
-            // Original document author. Maps to DocInfo's 'creator'
-            case self::PIDSI_AUTHOR:
-            // Last person to modify document. Maps to DocInfo's 'lastModifiedBy'
-            case self::PIDSI_LASTAUTHOR:
-            // Document's keywords. Maps to DocInfo's 'keywords'
-            case self::PIDSI_KEYWORDS:
-            // Document's subject. Maps to DocInfo's 'subject'
-            case self::PIDSI_SUBJECT:
-            // Document's title. Maps to DocInfo's 'title'
-            case self::PIDSI_TITLE:
-                // Type
-                $pos += 2;
-                // Padding
-                $pos += 2;
-                $size = self::getInt4d($data, $pos);
-                $pos += 4;
-                return substr($data, $pos, $size);
-
-            // Document creation time. Maps to DocInfo's 'created'
-            case self::PIDSI_CREATE_DTM:
-            // Time document was last modified. Maps to DocInfo's 'modified'
-            case self::PIDSI_LASTSAVE_DTM:
-                // Type
-                $pos += 2;
-                // Padding
-                $pos += 2;
-                // Data
-                $dwLowDateTime = self::getHex4d($data, $pos);
-                $pos += 4;
-                $dwHighDateTime = self::getHex4d($data, $pos);
-                $pos += 4;
-
-                $hex = $dwHighDateTime . $dwLowDateTime;
-                return hexdec($hex);
-
-                // Type
-                $pos += 2;
-                // Padding
-                $pos += 2;
-                $size = self::getInt4d($data, $pos);
-                $pos += 4;
-                return substr($data, $pos, $size);
-
-            // Property isn't relevant to DocInfo
-            default:
-                return null;
-        }
-    }
-
-    /**
      * @see  http://msdn.microsoft.com/en-us/library/dd949344%28v=office.12%29.aspx
      * @see  https://igor.io/2012/09/24/binary-parsing.html
      * @param string $data
@@ -1722,6 +1604,124 @@ class MsDoc extends AbstractReader implements ReaderInterface
     }
 
     /**
+     * Reads summary information binary s.t. we can generate DocInfo on load
+     *
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
+     * @return void
+    **/
+    private function readSummaryInfoContent($data)
+    {
+        // Offsets between the start of the relevant propertyset packet, and
+        // the start of a given property's data
+        $arrOffsets = array();
+
+        $offsetPropertyPacket = 48;
+
+        $pos = 0;
+        // ByteOrder
+        $pos += 2;
+        // Version
+        $pos += 2;
+        // SystemIdentifier
+        $pos += 4;
+        // CLSID
+        $pos += 16;
+        // NumPropertySets
+        $pos += 4;
+        // FMTID 0
+        $pos += 16;
+        // Offset 0
+        $pos += 4;
+        // FMTID 1 (0 bytes)
+        // Offset 1 (0 bytes)
+        // ----- PropertySet 0
+        // Size
+        $pos += 4;
+        // NumProperties
+        $numProperties = self::getInt4d($data, $pos);
+        $pos += 4;
+
+        // PropertyIdentifierAndOffset packets are always of format
+        // PropertyIdentifier (4 bytes), Offset (4 bytes). Iterate over expected
+        // number of properties, building array mapping identifiers to data
+        // offsets. Ensures we safely handle situations where fields are
+        // missing or out-of-order
+        for($i = 0; $i < $numProperties; $i++) {
+            $propertyIdentifier = self::getInt4d($data, $pos);
+            $pos += 4;
+            $offset = self::getInt4d($data, $pos);
+            $pos += 4;
+
+            $this->arraySummary[$propertyIdentifier] =
+                $this->readSummaryInfoProperty($data, $propertyIdentifier, $offset);
+        }
+    }
+
+    /**
+     * Attempts to parse a property with given identifier from the
+     * SummaryInformation stream. Only partial coverage has been added such that
+     * relevant DocInfo fields on the PhpWord object can be loaded
+     *
+     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942482.aspx
+     * @return mixed
+    **/
+    private function readSummaryInfoProperty($data, $identifier, $offset)
+    {
+        // Offsets are relative to the start of the property packet
+        $pos = self::OFFSET_PROPERTY_PACKET + $offset;
+
+        switch ($identifier) {
+            // Original document author. Maps to DocInfo's 'creator'
+            case self::PIDSI_AUTHOR:
+            // Last person to modify document. Maps to DocInfo's 'lastModifiedBy'
+            case self::PIDSI_LASTAUTHOR:
+            // Document's keywords. Maps to DocInfo's 'keywords'
+            case self::PIDSI_KEYWORDS:
+            // Document's subject. Maps to DocInfo's 'subject'
+            case self::PIDSI_SUBJECT:
+            // Document's title. Maps to DocInfo's 'title'
+            case self::PIDSI_TITLE:
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                $size = self::getInt4d($data, $pos);
+                $pos += 4;
+                return substr($data, $pos, $size);
+
+            // Document creation time. Maps to DocInfo's 'created'
+            case self::PIDSI_CREATE_DTM:
+            // Time document was last modified. Maps to DocInfo's 'modified'
+            case self::PIDSI_LASTSAVE_DTM:
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                // Low 4-bytes of MS' FILETIME - this is liable to overflow a
+                // 32-bit integer, so we need to load this as a hex string
+                // instead
+                $dwLowDateTime = self::getHex4d($data, $pos);
+                $pos += 4;
+                // High 4-bytes of MS' FILETIME - this may overflow a 32-bit
+                // integer, so we need to load this as a hex string instead
+                $dwHighDateTime = self::getHex4d($data, $pos);
+                $pos += 4;
+
+                // Build overall hex string representing the FILETIME packet
+                $hex = $dwHighDateTime . $dwLowDateTime;
+                // Convert resultant hex string back to decimal (will
+                // automatically convert to float if too large for an integer)
+                return hexdec($hex);
+
+            // Property isn't relevant to DocInfo
+            default:
+                return null;
+        }
+    }
+
+    /**
      * @param $data int
      * @param $pos int
      * @param $cbNum int
@@ -2508,8 +2508,8 @@ class MsDoc extends AbstractReader implements ReaderInterface
     }
 
     /**
-     * Read 64-bit hex string. Allows for parsing values greater than INT_MAX on
-     * platforms which are limited to 32-bit integers.
+     * Read 4-bytes as a hex string. Allows for parsing values greater than
+     * INT_MAX on platforms which are limited to 32-bit integers.
      *
      * @param string $data
      * @param int $pos
