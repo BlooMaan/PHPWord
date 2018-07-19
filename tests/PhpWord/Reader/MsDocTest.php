@@ -54,7 +54,13 @@ class MsDocTest extends \PHPUnit\Framework\TestCase
     {
         $filename = __DIR__ . '/../_files/documents/reader.doc';
         $phpWord = IOFactory::load($filename, 'MsDoc');
+        $docProps = $phpWord->getDocInfo();
         $this->assertInstanceOf('PhpOffice\\PhpWord\\PhpWord', $phpWord);
+        $this->assertEquals($docProps->getCreated(), 130417741590000000);
+        $this->assertEquals($docProps->getKeywords(), 'DOC_KEYWORDS');
+        $this->assertEquals($docProps->getModified(), 130417741590000000);
+        $this->assertEquals($docProps->getSubject(), 'DOC_SUBJECT');
+        $this->assertEquals($docProps->getTitle(), 'DOC_TITLE');
     }
 
     /**
