@@ -81,10 +81,6 @@ class MsDoc extends AbstractReader implements ReaderInterface
      * @var \stdClass[]
      */
     private $arraySections = array();
-    /**
-     * @var mixed[]
-    **/
-    private $arraySummary = array();
 
     const VERSION_97 = '97';
     const VERSION_2000 = '2000';
@@ -119,24 +115,24 @@ class MsDoc extends AbstractReader implements ReaderInterface
     // of property packet. Used to determine actual position of data, since
     // the provided offsets within
     const OFFSET_PROPERTY_PACKET = 48;
-    const CODE_PAGE              = 0x01;
-    const PIDSI_TITLE            = 0x02;
-    const PIDSI_SUBJECT          = 0x03;
-    const PIDSI_AUTHOR           = 0x04;
-    const PIDSI_KEYWORDS         = 0x05;
-    const PIDSI_COMMENTS         = 0x06;
-    const PIDSI_TEMPLATE         = 0x07;
-    const PIDSI_LASTAUTHOR       = 0x08;
-    const PIDSI_REVNUMBER        = 0x09;
-    const PIDSI_APPNAME          = 0x12;
-    const PIDSI_EDITTIME         = 0x0A;
-    const PIDSI_LASTPRINTED      = 0x0B;
-    const PIDSI_CREATE_DTM       = 0x0C;
-    const PIDSI_LASTSAVE_DTM     = 0x0D;
-    const PIDSI_PAGECOUNT        = 0x0E;
-    const PIDSI_WORDCOUNT        = 0x0F;
-    const PIDSI_CHARCOUNT        = 0x10;
-    const PIDSI_DOC_SECURITY     = 0x13;
+    const CODE_PAGE = 0x01;
+    const PIDSI_TITLE = 0x02;
+    const PIDSI_SUBJECT = 0x03;
+    const PIDSI_AUTHOR = 0x04;
+    const PIDSI_KEYWORDS = 0x05;
+    const PIDSI_COMMENTS = 0x06;
+    const PIDSI_TEMPLATE = 0x07;
+    const PIDSI_LASTAUTHOR = 0x08;
+    const PIDSI_REVNUMBER = 0x09;
+    const PIDSI_APPNAME = 0x12;
+    const PIDSI_EDITTIME = 0x0A;
+    const PIDSI_LASTPRINTED = 0x0B;
+    const PIDSI_CREATE_DTM = 0x0C;
+    const PIDSI_LASTSAVE_DTM = 0x0D;
+    const PIDSI_PAGECOUNT = 0x0E;
+    const PIDSI_WORDCOUNT = 0x0F;
+    const PIDSI_CHARCOUNT = 0x10;
+    const PIDSI_DOC_SECURITY = 0x13;
 
     /**
      * Loads PhpWord from file
@@ -154,14 +150,6 @@ class MsDoc extends AbstractReader implements ReaderInterface
         $this->readFibContent();
         $this->readSummaryInfoContent($this->_SummaryInformation);
 
-        $docProps = $this->phpWord->getDocInfo();
-        $docProps->setCreator($this->arraySummary[self::PIDSI_AUTHOR]);
-        $docProps->setLastModifiedBy($this->arraySummary[self::PIDSI_LASTAUTHOR]);
-        $docProps->setCreated($this->arraySummary[self::PIDSI_CREATE_DTM]);
-        $docProps->setModified($this->arraySummary[self::PIDSI_LASTSAVE_DTM]);
-        $docProps->setTitle($this->arraySummary[self::PIDSI_TITLE]);
-        $docProps->setSubject($this->arraySummary[self::PIDSI_SUBJECT]);
-        $docProps->setKeywords($this->arraySummary[self::PIDSI_KEYWORDS]);
         return $this->phpWord;
     }
 
@@ -1608,16 +1596,11 @@ class MsDoc extends AbstractReader implements ReaderInterface
      *
      * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
      * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
-     * @return void
-    **/
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @param string $data
+     */
     private function readSummaryInfoContent($data)
     {
-        // Offsets between the start of the relevant propertyset packet, and
-        // the start of a given property's data
-        $arrOffsets = array();
-
-        $offsetPropertyPacket = 48;
-
         $pos = 0;
         // ByteOrder
         $pos += 2;
@@ -1647,14 +1630,45 @@ class MsDoc extends AbstractReader implements ReaderInterface
         // number of properties, building array mapping identifiers to data
         // offsets. Ensures we safely handle situations where fields are
         // missing or out-of-order
-        for($i = 0; $i < $numProperties; $i++) {
+        $docProps = $this->phpWord->getDocInfo();
+
+        for ($i = 0; $i < $numProperties; $i++) {
             $propertyIdentifier = self::getInt4d($data, $pos);
             $pos += 4;
             $offset = self::getInt4d($data, $pos);
             $pos += 4;
 
-            $this->arraySummary[$propertyIdentifier] =
-                $this->readSummaryInfoProperty($data, $propertyIdentifier, $offset);
+            $mixedPropVal = $this->readSummaryInfoProperty(
+                $data,
+                $propertyIdentifier,
+                $offset
+            );
+
+            switch ($propertyIdentifier) {
+                case self::PIDSI_AUTHOR:
+                    $docProps->setCreator($mixedPropVal);
+                    break;
+                case self::PIDSI_CREATE_DTM:
+                    $docProps->setCreated($mixedPropVal);
+                    break;
+                case self::PIDSI_KEYWORDS:
+                    $docProps->setKeywords($mixedPropVal);
+                    break;
+                case self::PIDSI_LASTAUTHOR:
+                    $docProps->setLastModifiedBy($mixedPropVal);
+                    break;
+                case self::PIDSI_LASTSAVE_DTM:
+                    $docProps->setModified($mixedPropVal);
+                    break;
+                case self::PIDSI_TITLE:
+                    $docProps->setTitle($mixedPropVal);
+                    break;
+                case self::PIDSI_SUBJECT:
+                    $docProps->setSubject($mixedPropVal);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -1665,8 +1679,12 @@ class MsDoc extends AbstractReader implements ReaderInterface
      *
      * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
      * @see https://msdn.microsoft.com/en-us/library/dd942482.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @param string $data
+     * @param string $identifier
+     * @param int $offset
      * @return mixed
-    **/
+     */
     private function readSummaryInfoProperty($data, $identifier, $offset)
     {
         // Offsets are relative to the start of the property packet
@@ -1688,9 +1706,15 @@ class MsDoc extends AbstractReader implements ReaderInterface
                 // Padding
                 $pos += 2;
                 $size = self::getInt4d($data, $pos);
-                $pos += 4;
-                return substr($data, $pos, $size);
 
+                if ($size === 0) {
+                    return '';
+                }
+
+                $pos += 4;
+                // NOTE: Fetching length size-1 since we're including byte at
+                // current index
+                return substr($data, $pos, $size - 1);
             // Document creation time. Maps to DocInfo's 'created'
             case self::PIDSI_CREATE_DTM:
             // Time document was last modified. Maps to DocInfo's 'modified'
@@ -1714,7 +1738,6 @@ class MsDoc extends AbstractReader implements ReaderInterface
                 // Convert resultant hex string back to decimal (will
                 // automatically convert to float if too large for an integer)
                 return hexdec($hex);
-
             // Property isn't relevant to DocInfo
             default:
                 return null;
@@ -2514,10 +2537,11 @@ class MsDoc extends AbstractReader implements ReaderInterface
      * @param string $data
      * @param int $pos
      * @return string
-    **/
+     */
     public static function getHex4d($data, $pos)
     {
         $raw = $data[$pos + 3] . $data[$pos + 2] . $data[$pos + 1] . $data[$pos];
+
         return bin2hex($raw);
     }
 }
