@@ -115,25 +115,28 @@ class MsDoc extends AbstractReader implements ReaderInterface
     const MSOBLIPTIFF = 0x11;
     const MSOBLIPCMYKJPEG = 0x12;
 
+    // Byte offset from beginning of SummaryInformation stream, to beginning
+    // of property packet. Used to determine actual position of data, since
+    // the provided offsets within
     const OFFSET_PROPERTY_PACKET = 48;
-    const CODE_PAGE          = 0x01;
-    const PIDSI_TITLE        = 0x02;
-    const PIDSI_SUBJECT      = 0x03;
-    const PIDSI_AUTHOR       = 0x04;
-    const PIDSI_KEYWORDS     = 0x05;
-    const PIDSI_COMMENTS     = 0x06;
-    const PIDSI_TEMPLATE     = 0x07;
-    const PIDSI_LASTAUTHOR   = 0x08;
-    const PIDSI_REVNUMBER    = 0x09;
-    const PIDSI_APPNAME      = 0x12;
-    const PIDSI_EDITTIME     = 0x0A;
-    const PIDSI_LASTPRINTED  = 0x0B;
-    const PIDSI_CREATE_DTM   = 0x0C;
-    const PIDSI_LASTSAVE_DTM = 0x0D;
-    const PIDSI_PAGECOUNT    = 0x0E;
-    const PIDSI_WORDCOUNT    = 0x0F;
-    const PIDSI_CHARCOUNT    = 0x10;
-    const PIDSI_DOC_SECURITY = 0x13;
+    const CODE_PAGE              = 0x01;
+    const PIDSI_TITLE            = 0x02;
+    const PIDSI_SUBJECT          = 0x03;
+    const PIDSI_AUTHOR           = 0x04;
+    const PIDSI_KEYWORDS         = 0x05;
+    const PIDSI_COMMENTS         = 0x06;
+    const PIDSI_TEMPLATE         = 0x07;
+    const PIDSI_LASTAUTHOR       = 0x08;
+    const PIDSI_REVNUMBER        = 0x09;
+    const PIDSI_APPNAME          = 0x12;
+    const PIDSI_EDITTIME         = 0x0A;
+    const PIDSI_LASTPRINTED      = 0x0B;
+    const PIDSI_CREATE_DTM       = 0x0C;
+    const PIDSI_LASTSAVE_DTM     = 0x0D;
+    const PIDSI_PAGECOUNT        = 0x0E;
+    const PIDSI_WORDCOUNT        = 0x0F;
+    const PIDSI_CHARCOUNT        = 0x10;
+    const PIDSI_DOC_SECURITY     = 0x13;
 
     /**
      * Loads PhpWord from file
@@ -151,19 +154,14 @@ class MsDoc extends AbstractReader implements ReaderInterface
         $this->readFibContent();
         $this->readSummaryInfoContent($this->_SummaryInformation);
 
-        $docinfo = new DocInfo();
-        $docinfo->setCreator($this->arraySummary[self::PIDSI_AUTHOR]);
-        $docinfo->setLastModifiedBy($this->arraySummary[self::PIDSI_LASTAUTHOR]);
-        $docinfo->setCreated($this->arraySummary[self::PIDSI_CREATE_DTM]);
-        $docinfo->setModified($this->arraySummary[self::PIDSI_LASTSAVE_DTM]);
-        $docinfo->setTitle($this->arraySummary[self::PIDSI_TITLE]);
-        $docinfo->setSubject($this->arraySummary[self::PIDSI_SUBJECT]);
-        $docinfo->setKeywords($this->arraySummary[self::PIDSI_KEYWORDS]);
-        $this->phpWord->setDocInfo($docinfo);
-
-        var_dump($this->phpWord->getDocInfo());
-        die();
-
+        $docProps = $this->phpWord->getDocInfo();
+        $docProps->setCreator($this->arraySummary[self::PIDSI_AUTHOR]);
+        $docProps->setLastModifiedBy($this->arraySummary[self::PIDSI_LASTAUTHOR]);
+        $docProps->setCreated($this->arraySummary[self::PIDSI_CREATE_DTM]);
+        $docProps->setModified($this->arraySummary[self::PIDSI_LASTSAVE_DTM]);
+        $docProps->setTitle($this->arraySummary[self::PIDSI_TITLE]);
+        $docProps->setSubject($this->arraySummary[self::PIDSI_SUBJECT]);
+        $docProps->setKeywords($this->arraySummary[self::PIDSI_KEYWORDS]);
         return $this->phpWord;
     }
 
