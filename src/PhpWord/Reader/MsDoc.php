@@ -18,6 +18,7 @@
 namespace PhpOffice\PhpWord\Reader;
 
 use PhpOffice\Common\Drawing;
+use PhpOffice\PhpWord\Metadata\DocInfo;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\Shared\OLERead;
 use PhpOffice\PhpWord\Style;
@@ -110,6 +111,29 @@ class MsDoc extends AbstractReader implements ReaderInterface
     const MSOBLIPTIFF = 0x11;
     const MSOBLIPCMYKJPEG = 0x12;
 
+    // Byte offset from beginning of SummaryInformation stream, to beginning
+    // of property packet. Used to determine actual position of data, since
+    // the provided offsets within
+    const OFFSET_PROPERTY_PACKET = 48;
+    const CODE_PAGE = 0x01;
+    const PIDSI_TITLE = 0x02;
+    const PIDSI_SUBJECT = 0x03;
+    const PIDSI_AUTHOR = 0x04;
+    const PIDSI_KEYWORDS = 0x05;
+    const PIDSI_COMMENTS = 0x06;
+    const PIDSI_TEMPLATE = 0x07;
+    const PIDSI_LASTAUTHOR = 0x08;
+    const PIDSI_REVNUMBER = 0x09;
+    const PIDSI_APPNAME = 0x12;
+    const PIDSI_EDITTIME = 0x0A;
+    const PIDSI_LASTPRINTED = 0x0B;
+    const PIDSI_CREATE_DTM = 0x0C;
+    const PIDSI_LASTSAVE_DTM = 0x0D;
+    const PIDSI_PAGECOUNT = 0x0E;
+    const PIDSI_WORDCOUNT = 0x0F;
+    const PIDSI_CHARCOUNT = 0x10;
+    const PIDSI_DOC_SECURITY = 0x13;
+
     /**
      * Loads PhpWord from file
      *
@@ -124,6 +148,7 @@ class MsDoc extends AbstractReader implements ReaderInterface
 
         $this->readFib($this->dataWorkDocument);
         $this->readFibContent();
+        $this->readSummaryInfoContent($this->_SummaryInformation);
 
         return $this->phpWord;
     }
@@ -1567,6 +1592,159 @@ class MsDoc extends AbstractReader implements ReaderInterface
     }
 
     /**
+     * Reads summary information binary s.t. we can generate DocInfo on load
+     *
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @param string $data
+     */
+    private function readSummaryInfoContent($data)
+    {
+        $pos = 0;
+        // ByteOrder
+        $pos += 2;
+        // Version
+        $pos += 2;
+        // SystemIdentifier
+        $pos += 4;
+        // CLSID
+        $pos += 16;
+        // NumPropertySets
+        $pos += 4;
+        // FMTID 0
+        $pos += 16;
+        // Offset 0
+        $pos += 4;
+        // FMTID 1 (0 bytes)
+        // Offset 1 (0 bytes)
+        // ----- PropertySet 0
+        // Size
+        $pos += 4;
+        // NumProperties
+        $numProperties = self::getInt4d($data, $pos);
+        $pos += 4;
+
+        // PropertyIdentifierAndOffset packets are always of format
+        // PropertyIdentifier (4 bytes), Offset (4 bytes). Iterate over expected
+        // number of properties, building array mapping identifiers to data
+        // offsets. Ensures we safely handle situations where fields are
+        // missing or out-of-order
+        $docProps = $this->phpWord->getDocInfo();
+
+        for ($i = 0; $i < $numProperties; $i++) {
+            $propertyIdentifier = self::getInt4d($data, $pos);
+            $pos += 4;
+            $offset = self::getInt4d($data, $pos);
+            $pos += 4;
+
+            $mixedPropVal = $this->readSummaryInfoProperty(
+                $data,
+                $propertyIdentifier,
+                $offset
+            );
+
+            switch ($propertyIdentifier) {
+                case self::PIDSI_AUTHOR:
+                    $docProps->setCreator($mixedPropVal);
+                    break;
+                case self::PIDSI_CREATE_DTM:
+                    $docProps->setCreated($mixedPropVal);
+                    break;
+                case self::PIDSI_KEYWORDS:
+                    $docProps->setKeywords($mixedPropVal);
+                    break;
+                case self::PIDSI_LASTAUTHOR:
+                    $docProps->setLastModifiedBy($mixedPropVal);
+                    break;
+                case self::PIDSI_LASTSAVE_DTM:
+                    $docProps->setModified($mixedPropVal);
+                    break;
+                case self::PIDSI_TITLE:
+                    $docProps->setTitle($mixedPropVal);
+                    break;
+                case self::PIDSI_SUBJECT:
+                    $docProps->setSubject($mixedPropVal);
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
+
+    /**
+     * Attempts to parse a property with given identifier from the
+     * SummaryInformation stream. Only partial coverage has been added such that
+     * relevant DocInfo fields on the PhpWord object can be loaded
+     *
+     * @see https://msdn.microsoft.com/en-us/library/dd942543.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942482.aspx
+     * @see https://msdn.microsoft.com/en-us/library/dd942089.aspx
+     * @param string $data
+     * @param string $identifier
+     * @param int $offset
+     * @return mixed
+     */
+    private function readSummaryInfoProperty($data, $identifier, $offset)
+    {
+        // Offsets are relative to the start of the property packet
+        $pos = self::OFFSET_PROPERTY_PACKET + $offset;
+
+        switch ($identifier) {
+            // Original document author. Maps to DocInfo's 'creator'
+            case self::PIDSI_AUTHOR:
+            // Last person to modify document. Maps to DocInfo's 'lastModifiedBy'
+            case self::PIDSI_LASTAUTHOR:
+            // Document's keywords. Maps to DocInfo's 'keywords'
+            case self::PIDSI_KEYWORDS:
+            // Document's subject. Maps to DocInfo's 'subject'
+            case self::PIDSI_SUBJECT:
+            // Document's title. Maps to DocInfo's 'title'
+            case self::PIDSI_TITLE:
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                $size = self::getInt4d($data, $pos);
+
+                if ($size === 0) {
+                    return '';
+                }
+
+                $pos += 4;
+                // NOTE: Fetching length size-1 since we're including byte at
+                // current index
+                return substr($data, $pos, $size - 1);
+            // Document creation time. Maps to DocInfo's 'created'
+            case self::PIDSI_CREATE_DTM:
+            // Time document was last modified. Maps to DocInfo's 'modified'
+            case self::PIDSI_LASTSAVE_DTM:
+                // Type
+                $pos += 2;
+                // Padding
+                $pos += 2;
+                // Low 4-bytes of MS' FILETIME - this is liable to overflow a
+                // 32-bit integer, so we need to load this as a hex string
+                // instead
+                $dwLowDateTime = self::getHex4d($data, $pos);
+                $pos += 4;
+                // High 4-bytes of MS' FILETIME - this may overflow a 32-bit
+                // integer, so we need to load this as a hex string instead
+                $dwHighDateTime = self::getHex4d($data, $pos);
+                $pos += 4;
+
+                // Build overall hex string representing the FILETIME packet
+                $hex = $dwHighDateTime . $dwLowDateTime;
+                // Convert resultant hex string back to decimal (will
+                // automatically convert to float if too large for an integer)
+                return hexdec($hex);
+            // Property isn't relevant to DocInfo
+            default:
+                return null;
+        }
+    }
+
+    /**
      * @param $data int
      * @param $pos int
      * @param $cbNum int
@@ -2350,5 +2528,20 @@ class MsDoc extends AbstractReader implements ReaderInterface
         }
 
         return ord($data[$pos]) | (ord($data[$pos + 1]) << 8) | (ord($data[$pos + 2]) << 16) | $ord24;
+    }
+
+    /**
+     * Read 4-bytes as a hex string. Allows for parsing values greater than
+     * INT_MAX on platforms which are limited to 32-bit integers.
+     *
+     * @param string $data
+     * @param int $pos
+     * @return string
+     */
+    public static function getHex4d($data, $pos)
+    {
+        $raw = $data[$pos + 3] . $data[$pos + 2] . $data[$pos + 1] . $data[$pos];
+
+        return bin2hex($raw);
     }
 }
